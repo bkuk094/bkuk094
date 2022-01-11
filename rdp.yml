@@ -1,33 +1,65 @@
-name: RDP3
+#@title **Create User**
+import os
+username = "akuhnet" #@param {type:"string"}
+password = "123456" #@param {type:"string"}
 
-on: workflow_dispatch
+print("Creating User and Setting it up")
 
-jobs:
-  build:
+# Creat user
+os.system(f"useradd -m {username}")
 
-    runs-on: windows-latest
-    timeout-minutes: 9999
+# Add user to sudo group
+os.system(f"adduser {username} sudo")
+    
+# Set password user to 'root'
+os.system(f"echo '{username}:{password}' | sudo chpasswd")
 
-    steps:
-    - uses: actions/checkout@v2
-    - name: Copy NSSM & Ngrok to Windows Directory.
-      run: | 
-        copy nssm.exe C:\Windows\System32
-        copy ngrok.exe C:\Windows\System32
-    - name: Connect your NGROK account
-      run: .\ngrok.exe authtoken $Env:NGROK_AUTH_TOKEN
-      env:
-        NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN3 }}
-    - name: Make YML file for NGROK.
-      run: start NGROK-AP.bat
-    - name: Enable RDP Access.
-      run: | 
-        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server'-name "fDenyTSConnections" -Value 0
-        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "UserAuthentication" -Value 1
-    - name: Create Tunnel
-      run: sc start ngrok
-    - name: Connect to your RDP 2core-7GB Ram.
-      run: cmd /c NGROK-CHECK.bat
-    - name: All Done! You can close Tab now! Maximum VM time:6h.
-      run: cmd /c loop.bat
+# Change default shell from sh to bash
+os.system("sed -i 's/\/bin\/sh/\/bin\/bash/g' /etc/passwd")
+
+print("User Created and Configured")
+#@title **Google Drive Mount**
+#@markdown Google Drive used as Persistance HDD for files<br>
+#@markdown Mounted at Home directory
+
+
+def MountGDrive():
+    from os import environ as env
+    from google.colab import drive
+
+    config = env['CLOUDSDK_CONFIG']
+    addr = env['TBE_CREDS_ADDR']
+
+    ! runuser -l $user -c "yes | python3 -m pip install --user google-colab"  > /dev/null 2>&1
+
+    mount = """from os import environ as env
+from google.colab import drive
+
+env['CLOUDSDK_CONFIG']  = '{config}'
+env['TBE_CREDS_ADDR'] = '{addr}'
+
+drive.mount('{mountpoint}')""".format(config=config, addr=addr, mountpoint=mountpoint)
+
+    with open('/content/mount.py', 'w') as script:
+        script.write(mount)
+
+    ! runuser -l $user -c "python3 /content/mount.py"
+
+try:
+    mountpoint = f"/home/{username}/drive"
+    user = username
+except NameError:
+    print("username variable not found, mounting at `/content/drive' using `root'")
+    mountpoint = '/content/drive'
+    user = 'akuhnet'
+
+MountGDrive()
+#@title **Start RDP**
+#@markdown UPDATE<br>
+#@markdown Connect with RDP<br><br>
+#@markdown [Ngrok Auth Token](https://dashboard.ngrok.com/get-started/your-authtoken)<br><br>
+#@markdown Other Free VPS
+#@markdown [akuh.net](https://www.akuh.net/)
+! wget -O xfce4.sh https://bit.ly/akuhnetxrdpcolab > /dev/null 2>&1
+! chmod +x xfce4.sh
+! ./xfce4.sh
